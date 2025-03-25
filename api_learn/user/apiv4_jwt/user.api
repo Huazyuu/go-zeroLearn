@@ -1,0 +1,31 @@
+// 封装响应
+type LoginRequest {
+	UserName string `json:"userName"`
+	Password string `json:"password"`
+}
+
+type UserInfoResponse {
+	Id       uint   `json:"id"`
+	UserName string `json:"userName"`
+	Addr     string `json:"addr"`
+}
+
+@server (
+	prefix: /apiv1/users
+)
+service user {
+	@handler login
+	post /login (LoginRequest) returns (string)
+}
+
+@server (
+	prefix: /apiv1/users
+	jwt:    Auth
+)
+service user {
+	@handler userInfo
+	get /info returns (UserInfoResponse)
+}
+
+// 转化
+// goctl api go -api user.api -dir .
