@@ -1169,6 +1169,443 @@ func (l *LoginLogic) Login(req *types.LoginRequest) (resp string, err error) {
 
 ------
 
+## RPC
+
+服务与服务之间的通信,用于服务间的通信,在内网
+
+### proto编写
+
+#### 1. 基础声明
+
+
+
+```protobuf
+syntax = "proto3";  // 指定使用proto3语法
+package user;       // proto包名，用于避免命名冲突
+option go_package = "./user"; // 生成的Go代码包路径
+```
+
+- **`syntax`**：必须声明，proto3是当前主流版本
+- **`package`**：逻辑包名，不同proto文件间的隔离标识
+- **`go_package`**：生成的Go代码的导入路径，建议保持与项目模块路径一致
+
+------
+
+#### 2. 消息类型（Message）
+
+
+
+```protobuf
+// 用户信息请求
+message UserInfoRequest {
+  uint32 user_id = 1;  // 字段编号必须唯一
+}
+
+// 用户信息响应
+message UserInfoResponse {
+  uint32 user_id = 1;
+  string username = 2;
+}
+
+// 用户创建请求
+message UserCreateRequest {
+  string username = 1;
+  string password = 2;  // 实际场景建议加密传输
+}
+
+// 用户创建响应（空表示操作成功）
+message UserCreateResponse {}
+```
+
+- **字段编号规则**：
+  - 必须从1开始，不能重复
+  - 1-15占用1字节，适合高频字段
+  - 保留字段：删除或注释的字段编号不要重复使用
+- **字段类型**：
+  - 常用类型：`string`, `int32`, `uint32`, `bool`, `bytes`
+  - 推荐使用明确长度的类型如`int64`代替`int`
+
+------
+
+#### 3. 服务定义（Service）
+
+```protobuf
+service user {
+  rpc UserInfo(UserInfoRequest) returns (UserInfoResponse);
+  rpc UserCreate(UserCreateRequest) returns (UserCreateResponse);
+}
+```
+
+- 定义了两个RPC端点：
+  - **UserInfo**：查询用户信息
+  - **UserCreate**：创建新用户
+- 方法遵循 **请求-响应** 模式
+
+#### 4. 生成代码
+
+```bash
+goctl rpc protoc user.proto \
+  --go_out=./types \
+  --go-grpc_out=./types \
+  --zrpc_out=.
+```
+
+1. **参数说明**：
+
+   - `--go_out`：生成普通gRPC代码（消息结构）
+   - `--go-grpc_out`：生成gRPC服务接口代码
+   - `--zrpc_out`：生成go-zero增强代码（服务启动、配置等）
+
+2. **生成文件结构**：
+
+   ```bash
+   ├───etc            # 配置文件目录
+   ├───internal       # 内部实现代码
+   │   ├───config     # 配置结构定义
+   │   ├───logic      # 业务逻辑实现
+   │   ├───server     # 服务启动配置
+   │   └───svc        # 依赖管理
+   ├───types          # Protobuf生成代码
+   │   └───user       # 领域相关类型
+   └───userclient     # 客户端SDK
+   ```
+
+#### 5. 常见问题
+
+字段兼容性
+
+- **禁止修改**已使用字段的编号和类型
+
+- 新增字段应使用**新编号**
+
+- 废弃字段使用`reserved`标记：
+
+  
+
+  ```protobuf
+  message Foo {
+    reserved 2, 5 to 8;
+    reserved "phone";
+  }
+  ```
+
+ 命名规范
+
+- 消息名使用**大驼峰**：`UserInfoRequest`
+- 字段名使用**小写+下划线**：`user_id`
+- 服务名和方法名使用**大驼峰**
+
+性能优化
+
+- 高频请求字段尽量使用1-15编号
+- 避免过度嵌套消息结构
+- 大数据传输使用`bytes`代替`string`
+
+### 服务分组
+
+>默认情况下，一个proto文件里面只能有一个service
+>
+>有多个的话，转换会报错
+>
+>如果一个rpc服务，有很多方法，转换之后的目录就很不直观了
+>
+>我们可以在转换的时候，使用-m参数指定服务分组
+
+```protobuf
+syntax = "proto3";
+
+package user;
+option go_package = "./user";
+
+message UserInfoRequest {
+  uint32 user_id = 1;
+}
+
+message UserInfoResponse {
+  uint32 user_id = 1;
+  string username = 2;
+}
+
+
+message UserCreateRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message UserCreateResponse {
+
+}
+
+service UserCreate {
+  rpc UserCreate(UserCreateRequest) returns(UserCreateResponse);
+}
+
+
+service UserInfo {
+  rpc UserInfo(UserInfoRequest) returns(UserInfoResponse);
+}
+
+
+// goctl rpc protoc user.proto --go_out=./types --go-grpc_out=./types --zrpc_out=. -m
+
+```
+
+命令 `goctl rpc protoc user.proto --go_out=./types --go-grpc_out=./types --zrpc_out=. -m` 的详细讲解，包括参数含义、生成的文件结构及作用：
+
+1. `goctl rpc protoc`
+
+- **作用**：调用 go-zero 的代码生成工具，针对 proto 文件生成 RPC 服务相关代码。
+- **核心功能**：
+  - 生成 Protobuf 结构定义（`.pb.go`）
+  - 生成 gRPC 服务接口（`_grpc.pb.go`）
+  - 生成 go-zero 增强代码（服务配置、启动逻辑、依赖管理等）
+
+------
+
+2. `user.proto`
+
+- **作用**：输入的 Protobuf 文件，定义了 RPC 服务和消息结构。
+- **要求**：需符合 proto3 语法规范，包含完整的服务和方法定义。
+
+------
+
+3. 输出参数
+
+| 参数                    | 作用说明                                                | 生成内容示例                   |
+| :---------------------- | :------------------------------------------------------ | :----------------------------- |
+| `--go_out=./types`      | 生成 Protobuf 结构体代码（消息类型）                    | `user.pb.go`                   |
+| `--go-grpc_out=./types` | 生成 gRPC 服务接口代码（客户端/服务端存根）             | `user_grpc.pb.go`              |
+| `--zrpc_out=.`          | 生成 go-zero 框架的增强代码（服务启动、配置、逻辑层等） | `internal/`, `etc/`, `user.go` |
+| `-m`                    | 生成 Model 层代码（数据库操作层），需配合数据库配置使用 | `model/usermodel.go`           |
+
+
+
+### 结合gorm
+
+```protobuf
+syntax = "proto3";
+
+package user;
+
+option go_package = "./user";
+
+
+message UserInfoRequest {
+  uint32 user_id = 1;
+}
+message UserInfoResponse {
+  uint32 user_id = 1;
+  string username = 2;
+}
+
+
+message UserCreateRequest {
+  string username = 1;
+  string password = 2;
+}
+message UserCreateResponse {
+  uint32 user_id = 1;
+  string err = 2;
+}
+
+
+service user{
+  rpc UserInfo(UserInfoRequest)returns(UserInfoResponse);
+  rpc UserCreate(UserCreateRequest)returns(UserCreateResponse);
+}
+
+
+// goctl rpc protoc user.proto --go_out=./types --go-grpc_out=./types --zrpc_out=.
+
+```
+
+model
+
+```go
+package models
+
+import "gorm.io/gorm"
+
+type UserModel struct {
+	gorm.Model
+	Username string `gorm:"size:32" json:"username"`
+	Password string `gorm:"size:64" json:"password"`
+}
+
+func (UserModel) TableName() string {
+	return "users"
+}
+
+```
+
+yaml
+
+```yaml
+Name: user.rpc
+ListenOn: 0.0.0.0:8080
+Etcd:
+  Hosts:
+    - 127.0.0.1:2379
+  Key: user.rpc
+Mysql:
+  DataSource: root:123456@tcp(127.0.0.1:3307)/gozero_learn?charset=utf8mb4&parseTime=True&loc=
+```
+
+config
+
+```go
+package config
+
+import "github.com/zeromicro/go-zero/zrpc"
+
+type Config struct {
+	zrpc.RpcServerConf
+	Mysql struct {
+		DataSource string
+	}
+}
+
+```
+
+svc 依赖注入
+
+```go
+package svc
+
+import (
+	"fmt"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	models "gozero_learn/rpc_learn/user_gorm/model"
+	"gozero_learn/rpc_learn/user_gorm/rpc/internal/config"
+)
+
+type ServiceContext struct {
+	Config config.Config
+	DB     *gorm.DB
+}
+
+func NewServiceContext(c config.Config) *ServiceContext {
+	db := initGorm(c.Mysql.DataSource)
+	db.AutoMigrate(&models.UserModel{})
+	return &ServiceContext{
+		Config: c,
+		DB:     db,
+	}
+}
+
+// InitGorm gorm初始化
+func initGorm(MysqlDataSource string) *gorm.DB {
+	db, err := gorm.Open(mysql.Open(MysqlDataSource), &gorm.Config{})
+	if err != nil {
+		panic("连接mysql数据库失败, error=" + err.Error())
+	} else {
+		fmt.Println("连接mysql数据库成功")
+	}
+	return db
+}
+
+```
+
+logic调用
+
+```go
+package logic
+
+import (
+	"context"
+	models "gozero_learn/rpc_learn/user_gorm/model"
+
+	"gozero_learn/rpc_learn/user_gorm/rpc/internal/svc"
+	"gozero_learn/rpc_learn/user_gorm/rpc/types/user"
+
+	"github.com/zeromicro/go-zero/core/logx"
+)
+
+type UserCreateLogic struct {
+	ctx    context.Context
+	svcCtx *svc.ServiceContext
+	logx.Logger
+}
+
+func NewUserCreateLogic(ctx context.Context, svcCtx *svc.ServiceContext) *UserCreateLogic {
+	return &UserCreateLogic{
+		ctx:    ctx,
+		svcCtx: svcCtx,
+		Logger: logx.WithContext(ctx),
+	}
+}
+
+func (l *UserCreateLogic) UserCreate(in *user.UserCreateRequest) (pd *user.UserCreateResponse, err error) {
+
+	pd = new(user.UserCreateResponse)
+	var model models.UserModel
+	err = l.svcCtx.DB.Take(&model, "username = ?", in.Username).Error
+	if err == nil {
+		pd.Err = "该用户名已存在"
+		return
+	}
+	model = models.UserModel{
+		Username: in.Username,
+		Password: in.Password,
+	}
+	err = l.svcCtx.DB.Create(&model).Error
+	if err != nil {
+		logx.Error(err)
+		pd.Err = err.Error()
+		err = nil
+		return
+	}
+	pd.UserId = uint32(model.ID)
+	return
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
