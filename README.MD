@@ -12,7 +12,7 @@
 
 微服务是一种**分布式架构设计理念**，核心是将传统**单体应用**拆分为**多个小型、独立的服务**，每个服务专注于单一业务功能（如用户管理、订单处理等），并通过**轻量级 API**通信协作。
 
-![{4BE04850-A44A-4C7C-BEB0-F26F1653927E}](go-zero 学习笔记.assets/{4BE04850-A44A-4C7C-BEB0-F26F1653927E}-1742885688332-5.png)
+![{4BE04850-A44A-4C7C-BEB0-F26F1653927E}](go-zero学习笔记.assets/{4BE04850-A44A-4C7C-BEB0-F26F1653927E}-1742885688332-5.png)
 
 ### 核心特点：
 
@@ -123,7 +123,7 @@ Starting server at 0.0.0.0:8888...
 
 访问 127.0.0.1:8888/from/me 能看到数据就说明环境安装好了
 
-![{E46B4D0A-165F-4500-B176-6F9761342E34}](go-zero 学习笔记.assets/{E46B4D0A-165F-4500-B176-6F9761342E34}.png)
+![{E46B4D0A-165F-4500-B176-6F9761342E34}](go-zero学习笔记.assets/{E46B4D0A-165F-4500-B176-6F9761342E34}.png)
 
 快速创建一个rpc服务
 
@@ -1677,7 +1677,7 @@ cd rpc
 go run  rpc.go
 ```
 
-![{F64B0E25-E90A-4EC0-BBC6-AB12AFCA7699}](go-zero 学习笔记.assets/{F64B0E25-E90A-4EC0-BBC6-AB12AFCA7699}.png)
+![{F64B0E25-E90A-4EC0-BBC6-AB12AFCA7699}](go-zero学习笔记.assets/{F64B0E25-E90A-4EC0-BBC6-AB12AFCA7699}.png)
 
 ### vidoe
 
